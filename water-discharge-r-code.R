@@ -1,0 +1,96 @@
+#2.1==================================================================================================
+setwd("C:/Users/Ahsan Karim/Desktop/Data_Analysis_Project")
+USGS_01463500=read.table("USGS_01463500_Delaware_River_at_Trenton_NJ.txt",header=T)
+USGS_01463500=USGS_01463500[-c(1),]
+filtered_data=USGS_01463500[,c(3,4)]
+colnames(filtered_data)[2]="discharge"
+filtered_data[,2] = as.numeric(as.character(filtered_data$discharge))
+filtered_data[,2] = filtered_data[,2]*0.0283168
+YYYY_MM_DD = as.Date(USGS_01463500$datetime,"%Y-%m-%d")
+par(bg = 'gray99')
+plot(YYYY_MM_DD,filtered_data$discharge,type="l",xlab = "Time in Years",ylab = "Discharge in m^3/s", main = "Daily Discharge 2015-2017")
+#2.2==================================================================================================
+Y=substr(filtered_data$datetime,1,4)
+M=substr(filtered_data$datetime,6,7)
+D=substr(filtered_data$datetime,9,10)
+combined_data=cbind(filtered_data,Y,M,D,YYYY_MM_DD)
+library(dplyr)
+Y_discharge=group_by(combined_data,Y)
+Y_tbl=summarise(Y_discharge,
+                      mean=mean(discharge),
+                      sd=sd(discharge),
+                      min=min(discharge),
+                      max=max(discharge)
+                      )
+par(bg = 'gray99')
+plot(Y_tbl$Y,Y_tbl$discharge,xlab="Time [years]",ylab="Discharge [m^3/s]",main="Annual Discharge",ylim=c(0,2000),type="l")
+lines(Y_tbl$Y,Y_tbl$mean,col="black",lwd=2)
+lines(Y_tbl$Y,Y_tbl$sd,col="royalblue",lwd=2)
+lines(Y_tbl$Y,Y_tbl$min,col="green",lwd=2)
+lines(Y_tbl$Y,Y_tbl$max,col="red3",lwd=2)
+legend("right",c("Mean","Standard Deviation","Minimum","Maximum"),
+       col=c("black","royalblue","green","red3"),lty=1,lwd=2,cex=.75)
+days_index=strftime(strptime(combined_data$YYYY_MM_DD,format="%Y-%m-%d"),format="%j")
+combined_data=cbind(combined_data,days_index)
+D_discharge=group_by(combined_data,days_index)
+D_tbl=summarise(D_discharge,
+                  mean=mean(discharge),
+                  sd=sd(discharge),
+                  min=min(discharge),
+                  max=max(discharge)
+                  )
+par(bg = 'gray99')
+plot(D_tbl$days_index,D_tbl$mean,type="l",ylim=c(0,2000),xlab="days_index",ylab="Discharge [m^3/s]",main="Daily Discharge Climatology")
+lines(D_tbl$days_index,D_tbl$sd,col="blue",lw=2)
+lines(D_tbl$days_index,D_tbl$min,col="green",lw=2)
+lines(D_tbl$days_index,D_tbl$max,col="red3",lw=2)
+legend("topright",c("Mean", "Standard Deviation", "Minimum", "Maximum"),col = c("black","royalblue","green","red3"),lty = 1, lwd = 2, cex=.75)
+#2.3==================================================================================================
+library(fitdistrplus)
+library(MASS)
+data_length = length(filtered_data$discharge)
+normal = fitdistr(filtered_data$discharge,"normal")
+normalestimate = rnorm(data_length,normal$estimate['mean'],normal$estimate['sd'])
+lognormal = fitdistr(filtered_data$discharge,"lognormal")
+lognormallestimate = rlnorm(data_length,lognormal$estimate['meanlog'],lognormal$estimate['sdlog'])
+gamma = fitdistr(filtered_data$discharge,"gamma")
+gammaestimate = rgamma(data_length,gamma$estimate['shape'],gamma$estimate['rate'])
+exponential = fitdistr(filtered_data$discharge,"exponential")
+exponentialestimate = rexp(data_length,exponential$estimate['rate'])
+par(bg = 'gray99')
+hist(filtered_data$discharge,xlim=c(0,1000),ylim=c(0,.005),xlab="Discharge [m^3/s]",ylab="Density",main="PDF of Daily Discharge")
+lines(density(filtered_data$discharge),col="black",lwd=2)
+lines(density(normalestimate),col="yellow2", lwd=1)
+lines(density(lognormallestimate),col="purple",lwd=1)
+lines(density(gammaestimate),col="orchid1",lwd=2)
+lines(density(exponentialestimate),col="blue",lwd=1)
+legend("topright", c("Empirical","Normal","Exponential","Lognormal","Gamma"),col = c("black","seagreen3","purple","orchid1","blue"), lty = 1)
+par(bg = 'gray99')
+plot.ecdf(filtered_data$discharge,col="red3",xlab="Discharge m^3/s",ylab="Probability",main="Empirical vs. Theoretical CDFs",pch="o")
+lines(ecdf(normalestimate),col="slateblue4",lwd=2)
+lines(ecdf(exponentialestimate),col="blue",lwd=2)
+lines(ecdf(lognormallestimate),col="purple",lwd=2)
+lines(ecdf(gammaestimate),col="orchid1",lwd=2)
+legend("bottomright", c("Empirical","Normal","Exponential","Lognormal","Gamma"),
+       col = c("red3","yellow2","blue","purple","orchid1"), lty = 1)
+install.packages("extRemes")
+library(extRemes)
+frame()
+par(bg = 'gray99')
+qqplot(normalestimate,filtered_data$discharge,xlab="Standard Normal Distribution Quantities m^3/s",ylab="Observed Discharge Quantities m^3/s",main="Q-Q Plot, Normal Distribution")
+qqline(normalestimate,probs=c(0.1,0.6))
+qqplot(lognormallestimate,filtered_data$discharge,xlab="Standard Lognormal Distribution Quantities m^3/s",ylab="Observed Discharge Quantities m^3/s",main="Q-Q Plot, Lognormal Distribution")
+qqline(lognormallestimate,prob=c(0.1,0.6))
+qqplot(gammaestimate,filtered_data$discharge,xlab="Standard Gamma Distribution Quantities m^3/s",ylab="Observed Discharge Quantities m^3/s",main="Q-Q Plot, Gamma Distribution")
+qqline(gammaestimate,prob=c(0.1,0.6))
+#2.4==================================================================================================
+install.packages("stats")
+library(stats)
+normalks=ks.test(normalestimate,ecdf(filtered_data$discharge))
+lognormalks=ks.test(lognormallestimate,ecdf(filtered_data$discharge))
+gammaks=ks.test(gammaestimate,ecdf(filtered_data$discharge))
+expontialks=ks.test(exponentialestimate,ecdf(filtered_data$discharge))
+fevd=fevd(filtered_data$discharge,filtered_data,type="GEV")
+Table_5 = ci(fevd,alpha=0.05,type="parameter")
+Table_6 = return.level(fevd,return.period=c(5,10,50,100,500),do.ci=TRUE)
+plot(fevd)
